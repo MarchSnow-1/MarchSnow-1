@@ -1,0 +1,14 @@
+<svg width="169.4" height="20" viewBox="0 0 1694 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CodingTime: 76 hrs 30 mins">
+  <title>CodingTime: 76 hrs 30 mins</title>
+  <g>
+    <rect fill="#555" width="756" height="200"/>
+    <rect fill="#007ec6" x="756" width="938" height="200"/>
+  </g>
+  <g aria-hidden="true" text-anchor="start" font-family="Verdana,DejaVu Sans,sans-serif" font-size="110">
+    <text x="60" y="148" textLength="656" fill="#000" opacity="0.1">CodingTime</text>
+    <text x="50" y="138" textLength="656" fill="#fff">CodingTime</text>
+    <text x="811" y="148" textLength="838" fill="#000" opacity="0.1">76 hrs 30 mins</text>
+    <text x="801" y="138" textLength="838" fill="#fff">76 hrs 30 mins</text>
+  </g>
+  
+</svg>
