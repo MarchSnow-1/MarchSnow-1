@@ -98,12 +98,14 @@ if (!Number.isFinite(S) || S <= 0) {
 }
 
 const charW = ADVANCE_RATIO * S;
-const round2 = (n) => Math.round(n * 100) / 100;
 
-const labelBox = round2(labelText.length * charW + PAD * 2);
-const valueBox = round2(valueText.length * charW + PAD * 2);
-const totalW = round2(labelBox + valueBox);
-const baseline = round2((HEIGHT + CAP_RATIO * S) / 2);
+// Boxes round UP: the text needs exactly n*charW, so flooring it would clip a glyph.
+const labelBox = Math.ceil(labelText.length * charW) + PAD * 2;
+const valueBox = Math.ceil(valueText.length * charW) + PAD * 2;
+const totalW = labelBox + valueBox;
+
+// The baseline rounds to NEAREST. Rounding it up instead shifts the caps ~1px low.
+const baseline = Math.round((HEIGHT + CAP_RATIO * S) / 2);
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const title = `${esc(labelText)}: ${esc(valueText)}`;
@@ -119,8 +121,8 @@ writeFileSync(
     `</g>` +
     `<g fill="#fff" text-anchor="middle" font-family="${esc(opts.family)}" ` +
     `text-rendering="geometricPrecision" font-size="${S}">` +
-    `<text x="${round2(labelBox / 2)}" y="${baseline}"${weightAttr(labelWeight)}>${esc(labelText)}</text>` +
-    `<text x="${round2(labelBox + valueBox / 2)}" y="${baseline}"${weightAttr(valueWeight)}>${esc(valueText)}</text>` +
+    `<text x="${Math.round(labelBox / 2)}" y="${baseline}"${weightAttr(labelWeight)}>${esc(labelText)}</text>` +
+    `<text x="${Math.round(labelBox + valueBox / 2)}" y="${baseline}"${weightAttr(valueWeight)}>${esc(valueText)}</text>` +
     `</g></svg>\n`
 );
 
