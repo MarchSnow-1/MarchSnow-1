@@ -12,6 +12,6 @@
 ![JS](https://img.shields.io/badge/-JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 <br>
 ![Visitors](https://vbr.nathanchung.dev/badge?page_id=MarchSnow-1&style=for-the-badge&logo=Github&text=Visitors)
-<img alt="Coding Time" src="./assets/codingtime.png" height="28" />
+<img alt="Coding Time" src="https://raw.githubusercontent.com/MarchSnow-1/MarchSnow-1/refs/heads/main/assets/codingtime.png" height="28" />
 
 </div>
