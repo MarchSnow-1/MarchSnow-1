@@ -1,0 +1,96 @@
+name: Update Coding Time Badge
+
+on:
+  schedule:
+    - cron: "17 0 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-codingtime-badge
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download badge (SVG)
+        env:
+          BADGE_URL: ${{ secrets.CODINGTIMEAPI }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BADGE_URL}" ]; then
+            echo "::error:: Secret CODINGTIMEAPI INVALID"
+            exit 1
+          fi
+
+          mkdir -p assets
+          tmp="$(mktemp)"
+
+          if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 60 \
+                 -H 'Accept: image/svg+xml,image/*,*/*' \
+                 -H 'User-Agent: Mozilla/5.0 (compatible; github-actions)' \
+                 -o "$tmp" "$BADGE_URL"; then
+            echo "::error::Download Error"
+            rm -f "$tmp"
+            exit 1
+          fi
+
+          if ! grep -aqi '<svg' "$tmp"; then
+            echo "::error::Response is not SVG, content preview:"
+            head -c 300 "$tmp" || true
+            rm -f "$tmp"
+            exit 1
+          fi
+
+          mv "$tmp" assets/codingtime.svg
+          echo "SVG Saved: $(wc -c < assets/codingtime.svg) bytes"
+
+      - name: Convert SVG to PNG
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin >/dev/null
+
+          rsvg-convert -z 2 -o assets/codingtime.png assets/codingtime.svg
+
+          if ! file -b assets/codingtime.png | grep -q '^PNG image'; then
+            echo "::error::Converted PNG is invalid"
+            exit 1
+          fi
+
+          echo "PNG Saved:$(wc -c < assets/codingtime.png) bytes"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+
+          git add assets/codingtime.svg assets/codingtime.png
+
+          if git diff --cached --quiet; then
+            echo "No changes, skip commit."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: refresh coding time badge"
+
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Push succeeded."
+              exit 0
+            fi
+            echo "Push failed (attempt $attempt), rebasing and retrying..."
+            git pull --rebase --autostash
+          done
+
+          echo "::error::Push failed after 3 attempts."
+          exit 1
