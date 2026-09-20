@@ -2,8 +2,9 @@ name: Update Coding Time Badge
 
 on:
   schedule:
+    # Every 3 days at 00:17 UTC (off the hour, to reduce queueing delay)
     - cron: "17 0 */3 * *"
-  workflow_dispatch:
+  workflow_dispatch: # manual trigger, handy for the first verification run
 
 permissions:
   contents: write
@@ -15,25 +16,52 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # Safety net: don't burn the 6h limit if apt or curl hangs
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The runner ships with no body fonts at all (the apt manifest only has
+      # fonts-noto-color-emoji), so JetBrains Mono must be installed explicitly.
+      # Otherwise rsvg falls back to a generic font and the glyphs look bad.
+      # fonts-jetbrains-mono provides both Regular and Bold (the value uses bold).
+      - name: Install fonts
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin fonts-jetbrains-mono >/dev/null
+
+          # Make sure the font is really there, so we never silently fall back
+          if ! fc-list | grep -qi 'JetBrains Mono'; then
+            echo "::error::JetBrains Mono was not installed"
+            fc-list | head -20 || true
+            exit 1
+          fi
+
+          echo "Installed fonts:"
+          fc-list | grep -i 'JetBrains Mono' | sed 's/^/  /'
+
       - name: Download badge (SVG)
         env:
+          # Passed via env so the URL never shows up on the command line.
+          # GitHub also masks secret values in the logs automatically.
           BADGE_URL: ${{ secrets.CODINGTIMEAPI }}
         run: |
           set -euo pipefail
 
           if [ -z "${BADGE_URL}" ]; then
-            echo "::error:: Secret CODINGTIMEAPI INVALID"
+            echo "::error::Secret CODINGTIMEAPI is not set."
             exit 1
           fi
 
           mkdir -p assets
           tmp="$(mktemp)"
 
-          if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 60 \
+          # Note: Ziit labels the response as Content-Type: text/html, so we can't
+          # check the type with %{content_type}. Validate the body instead.
+          if ! curl -fsSL --retry 3 --retry-delay 5 --retry-connrefused --max-time 60 \
                  -H 'Accept: image/svg+xml,image/*,*/*' \
                  -H 'User-Agent: Mozilla/5.0 (compatible; github-actions)' \
                  -o "$tmp" "$BADGE_URL"; then
@@ -49,24 +77,54 @@ jobs:
             exit 1
           fi
 
-          mv "$tmp" assets/codingtime.svg
-          echo "SVG Saved: $(wc -c < assets/codingtime.svg) bytes"
+          mv "$tmp" upstream.svg
+          echo "Upstream SVG saved: $(wc -c < upstream.svg) bytes"
 
-      - name: Convert SVG to PNG
+      # Redraw Ziit's flat-style badge in the shields for-the-badge style so it
+      # matches the other badges in the README (28px tall, bold value).
+      # Case: keep the upstream label as-is (CodingTime), uppercase the value (76 HRS 43 MINS).
+      - name: Rebuild as for-the-badge
         run: |
           set -euo pipefail
 
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq librsvg2-bin >/dev/null
+          node scripts/make-badge.mjs upstream.svg assets/codingtime.svg \
+               --font-size=10 --label-case=preserve --value-case=upper
 
-          rsvg-convert -z 2 -o assets/codingtime.png assets/codingtime.svg
+          # The label must keep its original casing
+          if ! grep -q '>CodingTime<' assets/codingtime.svg; then
+            echo "::error::Label should be CodingTime, got:"
+            grep -o '<text[^>]*>[^<]*</text>' assets/codingtime.svg || true
+            exit 1
+          fi
+          if grep -q '>CODINGTIME<' assets/codingtime.svg; then
+            echo "::error::Label was uppercased to CODINGTIME"
+            exit 1
+          fi
+          if ! grep -q 'height="28"' assets/codingtime.svg; then
+            echo "::error::Generated badge height is not 28"
+            exit 1
+          fi
+          if ! grep -q 'JetBrains Mono' assets/codingtime.svg; then
+            echo "::error::Generated badge does not use JetBrains Mono"
+            exit 1
+          fi
+
+          echo "Badge SVG generated: $(wc -c < assets/codingtime.svg) bytes"
+
+      # -z 4 = 4x output (768x112). The README shows it at height="28" -> 192x28,
+      # matching the visual size of the neighbouring shields badges, but sharp on HiDPI.
+      - name: Render PNG
+        run: |
+          set -euo pipefail
+
+          rsvg-convert -z 4 -o assets/codingtime.png assets/codingtime.svg
 
           if ! file -b assets/codingtime.png | grep -q '^PNG image'; then
             echo "::error::Converted PNG is invalid"
             exit 1
           fi
 
-          echo "PNG Saved:$(wc -c < assets/codingtime.png) bytes"
+          echo "PNG rendered: $(wc -c < assets/codingtime.png) bytes"
 
       - name: Commit and push
         run: |
@@ -80,7 +138,9 @@ jobs:
           fi
 
           git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # The 41898282+ prefix is required, otherwise the commit isn't
+          # attributed to the Actions bot account.
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: refresh coding time badge"
 
           for attempt in 1 2 3; do
@@ -88,9 +148,9 @@ jobs:
               echo "Push succeeded."
               exit 0
             fi
-            echo "Push failed (attempt $attempt), rebasing and retrying..."
+            echo "Push failed (attempt ${attempt}), rebasing and retrying..."
             git pull --rebase --autostash
           done
 
-          echo "::error::Push failed after 3 attempts."
+          echo "::error::Push failed after 3 attempts. Check Settings -> Actions -> General -> Workflow permissions."
           exit 1
