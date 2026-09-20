@@ -23,8 +23,15 @@
  * Font is JetBrains Mono: monospace, a fixed 0.6em per character (measured across
  * 4 weights, all 600/1000), so text width is computable exactly without textLength
  * and the layout is stable in any environment.
- * Default size is 10px - measured cap height 7.5px, an exact match for shields
- * for-the-badge.
+ *
+ * Defaults are font-size 11 and bold on both halves. Measured at 1x against the real
+ * shields for-the-badge output:
+ *   shields (Verdana) : value 6.50px/char, 8px cap
+ *   bold 11px JBM     : value 6.43px/char, 8px cap   <- closest match
+ *   bold 10px JBM     : value 5.86px/char (-9.9%), thinner than shields
+ *   regular 10px JBM  : 1px strokes, almost no pure-white pixels -> looks blurry
+ * Every badge in the target README carries a logo, and shields bolds the label in
+ * that case, so label-weight defaults to bold as well.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -44,11 +51,17 @@ const CASE_MODES = {
   title: (s) => s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase()),
 };
 
+// Font weights. All JetBrains Mono weights share the same advance width (600/1000),
+// so changing the weight never changes the computed layout - only the stroke thickness.
+const WEIGHTS = { light: 300, regular: 400, normal: 400, medium: 500, semibold: 600, bold: 700 };
+
 // ---- args ----
 const opts = {
-  fontSize: 10,
+  fontSize: 11,
   family: 'JetBrains Mono',
   case: 'preserve',
+  labelWeight: 'bold',
+  valueWeight: 'bold',
   label: null,
   value: null,
 };
@@ -64,7 +77,8 @@ if (!inPath || !outPath) {
   console.error(
     'usage: node make-badge.mjs <in.svg> <out.svg> ' +
       '[--font-size=10] [--family="JetBrains Mono"] [--case=preserve|upper|lower|title] ' +
-      '[--label-case=...] [--value-case=...]'
+      '[--label-case=...] [--value-case=...] ' +
+      '[--label-weight=regular|medium|semibold|bold] [--value-weight=bold]'
   );
   process.exit(2);
 }
@@ -102,6 +116,18 @@ for (const [name, mode] of [['case', labelMode], ['value-case', valueMode]]) {
 const labelText = CASE_MODES[labelMode](label);
 const valueText = CASE_MODES[valueMode](value);
 
+// ---- weights ----
+function resolveWeight(name, key) {
+  const w = WEIGHTS[String(name).toLowerCase()];
+  if (w === undefined) {
+    console.error(`::error::Unknown --${key}="${name}", expected one of: ${Object.keys(WEIGHTS).join(' / ')}`);
+    process.exit(1);
+  }
+  return w;
+}
+const labelWeight = resolveWeight(opts.labelWeight, 'label-weight');
+const valueWeight = resolveWeight(opts.valueWeight, 'value-weight');
+
 // ---- layout ----
 const S = Number(opts.fontSize);
 if (!Number.isFinite(S) || S <= 0) {
@@ -119,6 +145,7 @@ const baseline = round2(BASELINE_RATIO * S);
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const title = `${esc(labelText)}: ${esc(valueText)}`;
+const weightAttr = (w) => (w === 400 ? '' : ` font-weight="${w}"`);
 
 writeFileSync(
   outPath,
@@ -130,9 +157,12 @@ writeFileSync(
     `</g>` +
     `<g fill="#fff" text-anchor="middle" font-family="${esc(opts.family)}" ` +
     `text-rendering="geometricPrecision" font-size="${S}">` +
-    `<text x="${round2(labelBox / 2)}" y="${baseline}">${esc(labelText)}</text>` +
-    `<text x="${round2(labelBox + valueBox / 2)}" y="${baseline}" font-weight="bold">${esc(valueText)}</text>` +
+    `<text x="${round2(labelBox / 2)}" y="${baseline}"${weightAttr(labelWeight)}>${esc(labelText)}</text>` +
+    `<text x="${round2(labelBox + valueBox / 2)}" y="${baseline}"${weightAttr(valueWeight)}>${esc(valueText)}</text>` +
     `</g></svg>\n`
 );
 
-console.log(`make-badge: "${labelText}" / "${valueText}"  font=${opts.family} ${S}px  ->  ${totalW}x${HEIGHT}`);
+console.log(
+  `make-badge: "${labelText}" / "${valueText}"  font=${opts.family} ${S}px ` +
+    `label-w=${labelWeight} value-w=${valueWeight}  ->  ${totalW}x${HEIGHT}`
+);
