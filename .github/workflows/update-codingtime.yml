@@ -118,9 +118,13 @@ jobs:
             echo "::error::Generated badge does not use JetBrains Mono"
             exit 1
           fi
-          # Both halves must be bold, otherwise the text looks thin and washed out
-          if [ "$(grep -c 'font-weight="700"' assets/codingtime.svg)" -ne 2 ]; then
-            echo "::error::Expected both label and value to be bold (700)"
+          # Both halves must be bold, otherwise the text looks thin and washed out.
+          # Note: grep -c counts matching LINES, and the SVG is a single line, so it
+          # always returns 1 here. Use grep -o | wc -l to count occurrences instead.
+          bold_count=$(grep -o 'font-weight="700"' assets/codingtime.svg | wc -l || true)
+          if [ "${bold_count}" -ne 2 ]; then
+            echo "::error::Expected both label and value to be bold (700), found ${bold_count}"
+            grep -o '<text[^>]*>[^<]*</text>' assets/codingtime.svg || true
             exit 1
           fi
 
