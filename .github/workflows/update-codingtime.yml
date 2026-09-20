@@ -81,14 +81,24 @@ jobs:
           echo "Upstream SVG saved: $(wc -c < upstream.svg) bytes"
 
       # Redraw Ziit's flat-style badge in the shields for-the-badge style so it
-      # matches the other badges in the README (28px tall, bold value).
-      # Case: keep the upstream label as-is (CodingTime), uppercase the value (76 HRS 43 MINS).
+      # matches the other badges in the README (28px tall, bold text).
+      #
+      # font-size=11 + bold on both halves, measured against the real shields
+      # for-the-badge output at 1x:
+      #   shields (Verdana): value stem 6.50px/char, 8px cap
+      #   bold 11px JBM    : value stem 6.43px/char, 8px cap  <- closest match
+      #   bold 10px JBM    : 5.86px/char (-9.9%), too thin, looks washed out
+      #   regular 10px JBM : 1px strokes, almost no pure-white pixels => blurry
+      # Every badge in the README carries a logo, and shields renders the label
+      # bold in that case, so the label is bold here too.
+      # Case: keep the upstream label as-is (CodingTime), uppercase the value (76 HRS 30 MINS).
       - name: Rebuild as for-the-badge
         run: |
           set -euo pipefail
 
           node scripts/make-badge.mjs upstream.svg assets/codingtime.svg \
-               --font-size=10 --label-case=preserve --value-case=upper
+               --font-size=11 --label-case=preserve --value-case=upper \
+               --label-weight=bold --value-weight=bold
 
           # The label must keep its original casing
           if ! grep -q '>CodingTime<' assets/codingtime.svg; then
@@ -106,6 +116,11 @@ jobs:
           fi
           if ! grep -q 'JetBrains Mono' assets/codingtime.svg; then
             echo "::error::Generated badge does not use JetBrains Mono"
+            exit 1
+          fi
+          # Both halves must be bold, otherwise the text looks thin and washed out
+          if [ "$(grep -c 'font-weight="700"' assets/codingtime.svg)" -ne 2 ]; then
+            echo "::error::Expected both label and value to be bold (700)"
             exit 1
           fi
 
