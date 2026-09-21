@@ -2,8 +2,8 @@ name: Update Coding Time Badge
 
 on:
   schedule:
-    # Every 3 days at 00:17 UTC (off the hour, to reduce queueing delay)
-    - cron: "17 0 */3 * *"
+    # Every 6 hours at :17 (off the hour, to reduce queueing delay)
+    - cron: "17 */6 * * *"
   workflow_dispatch: # manual trigger, handy for the first verification run
 
 permissions:
@@ -130,18 +130,31 @@ jobs:
 
           echo "Badge SVG generated: $(wc -c < assets/codingtime.svg) bytes"
 
-      # -z 4 = 4x output (768x112). The README shows it at height="28" -> 192x28,
-      # matching the visual size of the neighbouring shields badges, but sharp on HiDPI.
+      # Render at 1x. The badge is displayed at its natural size (height="28"), so
+      # shipping a 4x image only made the browser downscale it - and that resampling
+      # smeared the 1px strokes into grey. Measured at 1x, stroke solidity drops from
+      # 29.3% (native) to ~2% when a 4x image is scaled back down. Rendering at 1x
+      # means the browser draws the pixels as-is, with no resampling at all.
       - name: Render PNG
         run: |
           set -euo pipefail
 
-          rsvg-convert -z 4 -o assets/codingtime.png assets/codingtime.svg
+          rsvg-convert -o assets/codingtime.png assets/codingtime.svg
 
           if ! file -b assets/codingtime.png | grep -q '^PNG image'; then
             echo "::error::Converted PNG is invalid"
             exit 1
           fi
+
+          # Must stay at 1x: a taller image would be downscaled by the browser, which
+          # smears the 1px strokes. Parse "W x H" out of the file(1) output.
+          png_size=$(file -b assets/codingtime.png | grep -o '[0-9]\+ x [0-9]\+' | head -1)
+          png_h=${png_size##* x }
+          if [ "${png_h}" != "28" ]; then
+            echo "::error::Expected a 28px-tall PNG, got: ${png_size}"
+            exit 1
+          fi
+          echo "PNG size: ${png_size}"
 
           echo "PNG rendered: $(wc -c < assets/codingtime.png) bytes"
 
