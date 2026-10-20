@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="1200" height="675" alt="background" src="https://github.com/user-attachments/assets/6a9df14f-3c0d-44ff-b792-4411bde79df4" />
+<img width="1200" height="675" alt="background" src="https://raw.githubusercontent.com/MarchSnow-1/MarchSnow-1/main/assets/background.png" />
 <br></br>
 
 ![GO](https://img.shields.io/badge/-Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)
